@@ -7,9 +7,6 @@ spanning four sections — Chats, Archive, Email, and Stickers. Built on the rea
 Stickers editor, and **Text Summarizer** / **Text Proofreader** power the Summarize and Proofread
 actions in Chats/Archive/Email.
 
-> **Text Summarizer and Text Proofreader are pending public release** — MediaPipe hasn't published
-> download links for these two model bundles yet, so `RunScripts/download_models.sh` doesn't fetch
-> them.
 
 ## Demo
 
@@ -24,18 +21,16 @@ sped up to keep them short; the model calls themselves run at real speed.
 ## Setup
 
 ```
-sh RunScripts/download_models.sh   # fetches the 2 publicly-available model bundles (~215MB)
+sh RunScripts/download_models.sh   # fetches the 4 model bundles (~450MB total)
 xcodegen generate                  # generates MediaPipeIODemo.xcodeproj from project.yml
 pod install                        # installs MediaPipeTasksText, produces the .xcworkspace
 open MediaPipeIODemo.xcworkspace
 ```
 
-`download_models.sh` fetches `embedding_gemma.task` (Text Embedder) and
-`interactive_segmentation.task` (Interactive Segmenter) into
-`MediaPipeIODemo/Resources/Models/`. Text Summarizer and Text Proofreader need two more files
-there — `summarization_quant_200m_2modes.litertlm` and `proofread_quant_200m.litertlm` — which
-aren't publicly downloadable yet (see the note above); Summarize/Proofread simply won't work in
-the app until those are present, everything else works without them.
+`download_models.sh` fetches all four models — `summarization_quant_200m_2modes.litertlm` (Text
+Summarizer), `proofread_quant_200m.litertlm` (Text Proofreader), `embedding_gemma.task` (Text
+Embedder), and `interactive_segmentation.task` (Interactive Segmenter) — into
+`MediaPipeIODemo/Resources/Models/`.
 
 Then build & run the `MediaPipeIODemo` scheme. Requires Xcode 16+, iOS 17 deployment target.
 `xcodegen` and `cocoapods` are both installable via Homebrew (`brew install xcodegen cocoapods`).

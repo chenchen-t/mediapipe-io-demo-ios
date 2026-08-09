@@ -26,7 +26,32 @@ enum StickerCutout {
     /// put a positive stroke there) and treat whichever side that lands on as foreground for this
     /// specific result.
     static func cutout(image: UIImage, mask: CGImage, positivePoints: [StickerStrokePoint], padding: Int = 12) -> UIImage? {
-        guard let sourceCGImage = image.cgImage else { return nil }
+        // `image.cgImage`'s width/height are the raw, un-rotated sensor buffer — they ignore
+        // `imageOrientation` entirely, unlike `image.size`, which IS orientation-corrected. Camera
+        // photos are almost never `.up` (typically `.right` for a normal portrait hold: the raw
+        // buffer is landscape even though the photo displays as portrait). The mask, in contrast,
+        // comes from `MPImage(uiImage:)`, which DOES rotate for orientation before inference — so
+        // it's sized/aligned to the *displayed* photo. Operating on `image.cgImage` directly would
+        // stretch that display-oriented mask onto the wrong (rotated, wrong-aspect-ratio) raw
+        // buffer. Redraw into a fresh, `.up`-oriented image first so every pixel operation below
+        // happens in the same, orientation-correct space as the mask and the stroke coordinates.
+        let uprightImage: UIImage
+        if image.imageOrientation == .up {
+            uprightImage = image
+        } else {
+            // `UIGraphicsImageRenderer(size:)` defaults to the *device's screen scale* (3x on
+            // most current iPhones) unless told otherwise — confirmed on-device: without an
+            // explicit format, this silently produced a ~109-megapixel (9072x12096, 3x the
+            // expected 3024x4032) image for a real camera photo. Forcing `format.scale = 1` keeps
+            // the redraw at `image.size`'s exact pixel dimensions, matching the raw sensor buffer
+            // this is meant to replace, not blown up by an unrelated display-density factor.
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            uprightImage = UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: image.size))
+            }
+        }
+        guard let sourceCGImage = uprightImage.cgImage else { return nil }
         let width = sourceCGImage.width
         let height = sourceCGImage.height
         guard width > 0, height > 0 else { return nil }
@@ -72,8 +97,10 @@ enum StickerCutout {
         guard let fullCGImage = context.makeImage() else { return nil }
         guard maxX >= minX, maxY >= minY else {
             // Nothing passed the mask threshold — return the (fully transparent) full image rather
-            // than crash on an inverted crop rect.
-            return UIImage(cgImage: fullCGImage, scale: image.scale, orientation: image.imageOrientation)
+            // than crash on an inverted crop rect. `fullCGImage` was drawn from `uprightImage`, so
+            // it's already `.up`-oriented — tagging it with `.up` here (not `image.imageOrientation`)
+            // avoids re-rotating already-correct pixels.
+            return UIImage(cgImage: fullCGImage, scale: uprightImage.scale, orientation: .up)
         }
 
         let cropX = max(0, minX - padding)
@@ -83,9 +110,9 @@ enum StickerCutout {
         let cropRect = CGRect(x: cropX, y: cropY, width: cropWidth, height: cropHeight)
 
         guard let croppedCGImage = fullCGImage.cropping(to: cropRect) else {
-            return UIImage(cgImage: fullCGImage, scale: image.scale, orientation: image.imageOrientation)
+            return UIImage(cgImage: fullCGImage, scale: uprightImage.scale, orientation: .up)
         }
-        return UIImage(cgImage: croppedCGImage, scale: image.scale, orientation: image.imageOrientation)
+        return UIImage(cgImage: croppedCGImage, scale: uprightImage.scale, orientation: .up)
     }
 
     /// Samples the mask at each positive-stroke point and averages them; if that average sits

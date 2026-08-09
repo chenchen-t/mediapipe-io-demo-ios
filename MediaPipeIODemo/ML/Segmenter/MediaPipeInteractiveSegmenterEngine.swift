@@ -18,7 +18,18 @@ actor MediaPipeInteractiveSegmenterEngine: InteractiveSegmenterEngine {
     private var segmenter: InteractiveSegmenter?
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
+    /// The orientation `setImage`'s source photo carried — a camera capture is typically `.right`
+    /// (raw sensor buffer is landscape even though the photo displays portrait). Confirmed
+    /// on-device (not assumed): `MPImage(uiImage:)` correctly reports the *input*'s
+    /// orientation-corrected (portrait) dimensions, but the *output* segmentation mask comes back
+    /// sized to the raw sensor (landscape) dimensions regardless — the mask apparently mirrors the
+    /// graph's internal raw buffer layout, not the display orientation. `cgImage(from:)` uses this
+    /// to reorient the mask to match before handing it back, the same way `StickerCutout` reorients
+    /// the source photo.
+    private var sourceOrientation: UIImage.Orientation = .up
+
     func setImage(_ image: UIImage) async throws {
+        sourceOrientation = image.imageOrientation
         let engine = try segmenterInstance()
         let mpImage = try MPImage(uiImage: image)
         let engineBox = UncheckedSendableBox(engine)
@@ -41,7 +52,29 @@ actor MediaPipeInteractiveSegmenterEngine: InteractiveSegmenterEngine {
         let resultBox = try await Task.detached {
             UncheckedSendableBox(try engineBox.value.segment(strokes: strokesBox.value))
         }.value
-        return try await cgImage(from: resultBox.value)
+        guard let rawMask = try await cgImage(from: resultBox.value) else { return nil }
+        return await reorientToMatchSource(rawMask)
+    }
+
+    /// Redraws `cgImage` upright according to `sourceOrientation` — mirrors `StickerCutout`'s fix
+    /// for the source photo, applied here to the mask instead. A no-op when the source was already
+    /// `.up` (most library-picked photos).
+    private func reorientToMatchSource(_ cgImage: CGImage) async -> CGImage {
+        guard sourceOrientation != .up else { return cgImage }
+        let orientation = sourceOrientation
+        let box = UncheckedSendableBox(cgImage)
+        return await Task.detached {
+            let tagged = UIImage(cgImage: box.value, scale: 1, orientation: orientation)
+            // See StickerCutout.cutout's matching comment: without an explicit format,
+            // UIGraphicsImageRenderer defaults to the device's screen scale (3x here), blowing
+            // this up to 3x the expected pixel dimensions instead of matching `tagged.size` exactly.
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let upright = UIGraphicsImageRenderer(size: tagged.size, format: format).image { _ in
+                tagged.draw(in: CGRect(origin: .zero, size: tagged.size))
+            }
+            return upright.cgImage ?? box.value
+        }.value
     }
 
     func reset() {

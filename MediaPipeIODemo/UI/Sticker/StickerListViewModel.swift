@@ -28,4 +28,9 @@ final class StickerListViewModel {
         repository.deleteSticker(sticker)
         images[sticker.id] = nil
     }
+
+    func clearAll() {
+        repository.deleteAllStickers()
+        images.removeAll()
+    }
 }

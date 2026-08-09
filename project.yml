@@ -70,12 +70,14 @@ targets:
       # MediaPipeIODemo` — that import would pull in the whole app module's MediaPipeTasksText
       # dependency, and linking that pod a second time into the test bundle crashes at launch
       # ("Function with name FlowLimiterCalculator already registered", MediaPipe's native
-      # calculators aren't safe to register twice in one process). These two files are pure Swift
+      # calculators aren't safe to register twice in one process). These files are pure Swift
       # with no MediaPipe dependency, so just compiling them twice (once per target) sidesteps
       # the whole problem.
       - path: MediaPipeIODemo/UI/Components/WordDiff.swift
       - path: MediaPipeIODemo/Search/VectorIndex.swift
       - path: MediaPipeIODemo/Data/EmailBodySplitter.swift
+      - path: MediaPipeIODemo/Data/Storage/StickerCutout.swift
+      - path: MediaPipeIODemo/ML/Segmenter/InteractiveSegmenterEngine.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.google.mediapipe.examples.iodemo.tests

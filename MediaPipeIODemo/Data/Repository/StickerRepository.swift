@@ -27,6 +27,15 @@ final class StickerRepository {
         try? modelContext.save()
     }
 
+    /// Backs the gallery's "Clear All" action — deletes every saved sticker's PNG and metadata.
+    func deleteAllStickers() {
+        for sticker in allStickers() {
+            try? FileManager.default.removeItem(at: StickerLocator.url(for: sticker))
+            modelContext.delete(sticker)
+        }
+        try? modelContext.save()
+    }
+
     /// Runs the segmenter's encoder pass on a newly captured/picked photo — must be called before
     /// `segment`, and again whenever the source image changes.
     func setImage(_ image: UIImage) async throws {
